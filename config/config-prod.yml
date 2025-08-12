@@ -1,0 +1,20 @@
+# Production configuration for k8s-drift-sync
+clusters:
+  - name: prod
+    kubeconfig_context: prod-context
+    repos:
+      - name: platform
+        url: https://github.com/org/repo.git
+        branch: main
+        paths:
+          - k8s/namespaces/prod
+settings:
+  output_dir: out
+  ignore_k8s_fields:
+    - metadata.resourceVersion
+    - metadata.uid
+    - metadata.creationTimestamp
+    - metadata.generation
+    - metadata.managedFields
+    - metadata.annotations.kubectl.kubernetes.io/last-applied-configuration
+    - status 

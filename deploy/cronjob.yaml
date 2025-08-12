@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: k8s-drift-sync
+  namespace: default
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: drift-sync
+          containers:
+            - name: drift
+              image: your-registry/k8s-drift-sync:latest
+              args: ["scan", "--config", "/app/config/config.yaml", "--formats", "json", "md"]
+              volumeMounts:
+                - name: cfg
+                  mountPath: /app/config
+                - name: kube
+                  mountPath: /root/.kube
+                  readOnly: true
+          restartPolicy: OnFailure
+          volumes:
+            - name: cfg
+              configMap:
+                name: drift-sync-config
+            - name: kube
+              secret:
+                secretName: kubeconfig 
