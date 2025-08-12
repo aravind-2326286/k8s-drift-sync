@@ -19,9 +19,10 @@ A Python CLI to detect, report, and remediate configuration drift between Kubern
 .
 ├─ config/
 │  ├─ config.yaml                   # Default runtime config (edit this)
-│  ├─ config.dev.yaml               # Optional dev config (copy to config.yaml)
-│  ├─ config.uat.yaml               # Optional UAT config (copy to config.yaml)
-│  └─ config.prod.yaml              # Optional prod config (copy to config.yaml)
+│  ├─ config-dev.yml                # Optional dev config (use with --config)
+│  ├─ config-uat.yml                # Optional UAT config (use with --config)
+│  ├─ config-prod.yml               # Optional prod config (use with --config)
+│  └─ config-local.yml              # Optional local override (gitignored; create locally)
 ├─ src/
 │  └─ drift_sync/                    # Application package (src/ layout)
 │     ├─ cli.py                      # Typer CLI entrypoint
@@ -34,9 +35,10 @@ A Python CLI to detect, report, and remediate configuration drift between Kubern
 ├─ deploy/                           # K8s RBAC and CronJob examples
 │  ├─ rbac/
 │  │  ├─ scan-only.yaml
+│  │  ├─ namespace-scan.yaml
 │  │  └─ remediation.yaml
 │  └─ cronjob.yaml
-├─ .github/workflows/drift-scan.yml  # GitHub Actions workflow
+├─ .github/workflows/drift-scan.yml  # GitHub Actions workflow (manual trigger)
 ├─ pyproject.toml                    # Package config (src layout)
 ├─ requirements.txt                  # Python dependencies
 ├─ Dockerfile                        # Container build
@@ -62,33 +64,24 @@ A Python CLI to detect, report, and remediate configuration drift between Kubern
 
 ## Configuration
 - Default file: `config/config.yaml` (already present). Edit `kubeconfig_context` and `repos`.
-- Local development (recommended):
-  - Personal override (gitignored): `config/config-local.yml` or `config/config.local.yaml`.
+- Local development (optional, preferred locally):
+  - Use `config/config-local.yml` for personal overrides/secrets (gitignored).
+  - If you don’t see this file, create it by copying the default and editing:
+    - macOS/Linux: `cp config/config.yaml config/config-local.yml`
+    - Windows PowerShell: `Copy-Item config\config.yaml config\config-local.yml`
   - Discovery order when you do not pass `--config`:
     1) `config/config-local.yml`
     2) `config/config.local.yaml`
     3) `config/config.yaml`
 - Environment-specific files (optional):
-  - Use hyphenated names if you prefer: `config/config-dev.yml`, `config/config-uat.yml`, `config/config-prod.yml`.
-  - To run with a specific environment file:
-```bash
-k8s-drift-sync scan --config config/config-dev.yml
-```
-
-### Local override example
-A sample local override is provided at `config/config-local.sample.yml`.
-Copy it to `config/config-local.yml` and edit for your machine:
-```bash
-cp config/config-local.sample.yml config/config-local.yml
-# edit kubeconfig_context, repo URL/paths
-```
-This file is gitignored and preferred automatically when present.
+  - `config/config-dev.yml`, `config/config-uat.yml`, `config/config-prod.yml`
+  - Run with a specific file using `--config`, e.g.: `k8s-drift-sync scan --config config/config-dev.yml`
 
 ## Usage
 - Install and run:
 ```bash
 pip install -e .
-k8s-drift-sync scan                 # uses config/config.yaml
+k8s-drift-sync scan                 # uses config/config-local.yml if present, else config/config.yaml
 k8s-drift-sync remediate --cluster-name dev
 ```
 
@@ -178,7 +171,7 @@ In GitHub Actions, the provided workflow combines per-cluster `.sarif` files and
   - Confirm repo URL/branch and network access; delete `.cache/repos/<name>` and retry.
 
 ## CI/CD usage
-See ready-to-use workflow in `.github/workflows/drift-scan.yml` (uses `config/config.yaml`).
+See ready-to-use workflow in `.github/workflows/drift-scan.yml` (manual trigger; uploads JSON/MD/SARIF artifacts, and SARIF to Code Scanning).
 
 ### GitHub Actions (scan nightly and fail on drift)
 ```yaml
