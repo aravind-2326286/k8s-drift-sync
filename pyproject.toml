@@ -1,0 +1,24 @@
+[project]
+name = "k8s-drift-sync"
+version = "0.1.0"
+description = "Detect, report, and remediate Kubernetes configuration drift from Git"
+authors = [{name = "Your Name"}]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "kubernetes>=28.1.0",
+  "GitPython>=3.1.43",
+  "PyYAML>=6.0.2",
+  "typer>=0.12.3",
+  "rich>=13.7.1",
+  "deepdiff>=6.7.1",
+  "python-dateutil>=2.9.0",
+]
+
+[project.scripts]
+k8s-drift-sync = "drift_sync.cli:app"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-q"
+pythonpath = ["."] 
