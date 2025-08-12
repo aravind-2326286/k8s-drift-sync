@@ -1,5 +1,5 @@
-# Example configuration for k8s-drift-sync
-# Copy this file to config.yaml and adjust values
+# Default configuration for k8s-drift-sync (generic)
+# Adjust kubeconfig_context and repo URL/paths to your environment
 
 clusters:
   - name: dev
@@ -10,16 +10,7 @@ clusters:
         branch: main
         paths:
           - k8s/namespaces/dev
-  - name: prod
-    kubeconfig_context: prod-context
-    repos:
-      - name: platform
-        url: https://github.com/org/repo.git
-        branch: main
-        paths:
-          - k8s/namespaces/prod
 
-# Optional global settings
 settings:
   output_dir: out
   ignore_k8s_fields:

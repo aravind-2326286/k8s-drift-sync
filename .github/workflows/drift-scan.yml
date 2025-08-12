@@ -1,0 +1,86 @@
+name: Drift Scan
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install .
+
+      - name: Configure kubeconfig from secret
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+
+      - name: Run scan (with SARIF)
+        run: |
+          k8s-drift-sync scan --config config/config.yaml --formats json md sarif --output-dir out
+
+      - name: Upload reports (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-reports
+          path: out/**
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Combine SARIF files
+        id: combine
+        run: |
+          set -e
+          latest=$(ls -1d out/* | sort | tail -n1)
+          shopt -s nullglob
+          files=($latest/*.sarif)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          jq -s '{"$schema":"https://json.schemastore.org/sarif-2.1.0.json","version":"2.1.0","runs": (map(.runs) | add)}' "${files[@]}" > "$latest/combined.sarif"
+          echo "found=true" >> $GITHUB_OUTPUT
+          echo "sarif=$latest/combined.sarif" >> $GITHUB_OUTPUT
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: steps.combine.outputs.found == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.combine.outputs.sarif }}
+
+      - name: Fail if drift found (Changed/Missing/Extra > 0)
+        run: |
+          set -e
+          latest=$(ls -1d out/* | sort | tail -n1)
+          found=0
+          for f in "$latest"/*.json; do
+            changed=$(jq '.summary.changed' "$f")
+            missing=$(jq '.summary.missing' "$f")
+            extra=$(jq '.summary.extra' "$f")
+            echo "$f => changed=$changed missing=$missing extra=$extra"
+            if [ $changed -gt 0 ] || [ $missing -gt 0 ] || [ $extra -gt 0 ]; then
+              found=1
+            fi
+          done
+          if [ $found -eq 1 ]; then
+            echo "Drift detected. Failing the build." >&2
+            exit 1
+          fi 

@@ -29,15 +29,33 @@ def _timestamp_folder(base_dir: Path) -> Path:
     return out
 
 
+def _resolve_config_path(provided: Path) -> Path:
+    if provided and provided.exists():
+        return provided
+    # auto-discover local override first (hyphen or dot), then default
+    if provided == Path("config.yaml"):
+        local_hyphen = Path("config/config-local.yml")
+        if local_hyphen.exists():
+            return local_hyphen
+        local_dot = Path("config/config.local.yaml")
+        if local_dot.exists():
+            return local_dot
+        default_cfg = Path("config/config.yaml")
+        if default_cfg.exists():
+            return default_cfg
+    return provided
+
+
 @app.command()
 def scan(
     config: Path = typer.Option(Path("config.yaml"), help="Path to config file"),
     output_dir: Optional[Path] = typer.Option(None, help="Output directory for reports"),
-    formats: List[str] = typer.Option(["json", "md"], help="Report formats: json, md"),
+    formats: List[str] = typer.Option(["json", "md"], help="Report formats: json, md, html, sarif"),
     include_extras: bool = typer.Option(True, help="Detect resources present in cluster but not in Git"),
 ):
     """Scan clusters and generate drift reports."""
-    cfg, settings = load_config(config)
+    cfg_path = _resolve_config_path(config)
+    cfg, settings = load_config(cfg_path)
     base_out = Path(output_dir or settings.output_dir)
     run_out = _timestamp_folder(base_out)
 
@@ -60,12 +78,18 @@ def scan(
 
         detector = DriftDetector(ignore_fields=settings.ignore_k8s_fields)
         report = detector.detect(dyn, desired_objects, include_extras=include_extras)
+        # Set cluster name for downstream writers
+        report.cluster_name = cluster.name
 
         # Write reports
         if "json" in formats:
             report_writer.write_json(report, run_out / f"{cluster.name}.json")
         if "md" in formats:
             report_writer.write_markdown(report, run_out / f"{cluster.name}.md")
+        if "html" in formats:
+            report_writer.write_html(report, run_out / f"{cluster.name}.html")
+        if "sarif" in formats:
+            report_writer.write_sarif(report, run_out / f"{cluster.name}.sarif")
 
         # Console summary table
         table = Table(title=f"Drift Summary - {cluster.name}")
@@ -88,7 +112,8 @@ def remediate(
     delete_extras: bool = typer.Option(False, help="Delete resources that are only in cluster (not in Git)"),
 ):
     """Apply desired state to remediate drift."""
-    cfg, settings = load_config(config)
+    cfg_path = _resolve_config_path(config)
+    cfg, settings = load_config(cfg_path)
 
     repo_mgr = RepoManager(base_cache_dir=Path(".cache/repos"))
     desired_loader = DesiredStateLoader()
@@ -110,6 +135,7 @@ def remediate(
 
         detector = DriftDetector(ignore_fields=settings.ignore_k8s_fields)
         report = detector.detect(dyn, desired_objects, include_extras=True)
+        report.cluster_name = cluster.name
 
         remediator = Remediator(dyn)
         changes = 0
@@ -136,7 +162,8 @@ def list_clusters(
     config: Path = typer.Option(Path("config.yaml"), help="Path to config file"),
 ):
     """List clusters configured in the tool."""
-    cfg, _ = load_config(config)
+    cfg_path = _resolve_config_path(config)
+    cfg, _ = load_config(cfg_path)
     for cluster in cfg:
         console.print(f"- {cluster.name} (context={cluster.kubeconfig_context})")
 

@@ -17,3 +17,7 @@ Thumbs.db
 # Project caches
 .cache/
 out/
+
+# Local configuration overrides (if any)
+config/config.local.yaml
+config/config-local.yml
