@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Set, Tuple
+from typing import Dict, Iterable, List
 
 from deepdiff import DeepDiff
 from kubernetes.dynamic import DynamicClient
@@ -23,13 +23,23 @@ def _prune(obj: Dict, ignore_fields: Iterable[str]) -> Dict:
     def delete_path(d: Dict, path: List[str]):
         cur = d
         for i, part in enumerate(path):
-            if isinstance(cur, dict) and part in cur:
+            if not isinstance(cur, dict):
+                return
+            if part in cur:
                 if i == len(path) - 1:
                     del cur[part]
-                else:
-                    cur = cur[part]
-            else:
+                    return
+                cur = cur[part]
+                continue
+            # Handle dotted annotation keys like
+            # metadata.annotations.kubectl.kubernetes.io/last-applied-configuration
+            if part == "annotations" and "annotations" in cur and i < len(path) - 1:
+                literal_key = ".".join(path[i + 1 :])
+                anns = cur.get("annotations", {})
+                if isinstance(anns, dict) and literal_key in anns:
+                    del anns[literal_key]
                 return
+            return
 
     copy = {} if obj is None else dict(obj)
     # Deep copy manually to avoid importing more libs
@@ -50,7 +60,6 @@ class DriftDetector:
         summary = report.summary
 
         desired_index = {str(_make_key(o)): o for o in desired_objects}
-        desired_keys = list(desired_index.keys())
 
         # Evaluate desired vs live
         for key_str, desired in desired_index.items():
