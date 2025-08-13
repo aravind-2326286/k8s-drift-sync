@@ -6,7 +6,7 @@ from deepdiff import DeepDiff
 from kubernetes.dynamic import DynamicClient
 
 from .models import DriftItem, DriftReport, DriftSummary, ResourceKey
-from ..k8s.fetcher import fetch_live_for_desired, get_resource_handle
+from ..k8s import fetcher
 
 
 def _make_key(obj: Dict) -> ResourceKey:
@@ -55,7 +55,7 @@ class DriftDetector:
         # Evaluate desired vs live
         for key_str, desired in desired_index.items():
             key = _make_key(desired)
-            live = fetch_live_for_desired(dyn, desired)
+            live = fetcher.fetch_live_for_desired(dyn, desired)
             if live is None:
                 report.items.append(DriftItem(key=key, status="MissingInCluster", desired_object=desired))
                 summary.missing += 1
@@ -83,7 +83,7 @@ class DriftDetector:
                 by_gvk_ns_to_names[gvk][ns].add(key.name)
 
             for (api_version, kind), ns_to_names in by_gvk_ns_to_names.items():
-                res = get_resource_handle(dyn, api_version, kind)
+                res = fetcher.get_resource_handle(dyn, api_version, kind)
                 for ns, desired_names in ns_to_names.items():
                     try:
                         if ns == "__cluster__":
